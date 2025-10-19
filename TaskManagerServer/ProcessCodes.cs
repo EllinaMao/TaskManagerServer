@@ -10,6 +10,7 @@ namespace TaskManagerServer
     {
         public const int GetProcesses = 1;
         public const int KillProcess = 2;
-        public const int GetProcessDetails = 3;
+        public const int CreateProcess = 3;
+
     }
 }

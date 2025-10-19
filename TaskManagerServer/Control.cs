@@ -10,13 +10,16 @@ namespace TaskManagerServer
     public class ControlAsync
     {
         private int _port;
-        private Socket _listener;
+        private Socket? _listener;
         private bool _running;
 
 
-        public event Action<string> LogMessage;
-        public event Action<string> ClientConnected;
-        public event Action<string> ClientDisconnected;
+        public event Action<string>? LogMessage;
+        public event Action<string>? ClientConnected;
+        public event Action<string>? ClientDisconnected;
+        public event Action<List<ProcessInfo>>? ProcessesReceived;
+
+        private Socket? _clientSocket;
 
         private SynchronizationContext _uiContext = null;//winforms
 
@@ -49,9 +52,10 @@ namespace TaskManagerServer
                 try
                 {
                     var clientSocket = await _listener.AcceptAsync();
+                    _clientSocket = clientSocket;
                     string? ep = clientSocket?.RemoteEndPoint?.ToString();
                     ClientConnected?.Invoke(ep);
-                    _ = HandleClientAsync(clientSocket, ep);
+                    _ = HandleClientAsync(_clientSocket, ep);
                 }
                 catch (Exception ex)
                 {
@@ -59,8 +63,10 @@ namespace TaskManagerServer
                 }
             }
         }
-        public async Task SendCommandAsync(Socket client, int commandCode, object? data = null)
+        public async Task SendCommandAsync(int commandCode, object? data = null)
         {
+            if (_clientSocket == null) return;
+
             var message = new
             {
                 Command = commandCode,
@@ -68,7 +74,7 @@ namespace TaskManagerServer
             };
             string json = JsonSerializer.Serialize(message);
             byte[] msg = Encoding.UTF8.GetBytes(json);
-            await client.SendAsync(msg, SocketFlags.None);
+            await _clientSocket.SendAsync(msg, SocketFlags.None);
         }
         private List<ProcessInfo> ParseProcessList(string json)
         {
@@ -88,7 +94,9 @@ namespace TaskManagerServer
             _running = false;
             try
             {
-                _listener.Close();
+                _listener?.Close();
+                _clientSocket?.Close();
+
             }
             catch (Exception ex)
             {
@@ -107,14 +115,18 @@ namespace TaskManagerServer
                     int bytesRec = await client.ReceiveAsync(bytes, SocketFlags.None);
                     if (bytesRec == 0)
                     {
-                        //close socket
                         break;
                     }
                     sb.Append(Encoding.UTF8.GetString(bytes, 0, bytesRec));
                 }
-                    string json = sb.ToString();
-                    var processes = ParseProcessList(json);
-                    Log($"Получено {processes.Count} процессов от {ep}");
+                string json = sb.ToString();
+                var processes = ParseProcessList(json);
+
+                Log($"Получено {processes.Count} процессов от {ep}");
+                DisplayProcesses(processes, ep);
+                ProcessesReceived?.Invoke(processes);
+
+
             }
             catch (Exception ex)
             {
@@ -131,11 +143,31 @@ namespace TaskManagerServer
                 {
                     {
                         ClientDisconnected?.Invoke(ep);
+                        _clientSocket = null;
+
                     }
                 }
 
             }
         }
 
+        private List<string> FormatProcesses(List<ProcessInfo> processes)
+        {
+            var lines = new List<string>();
+            foreach (var p in processes)
+            {
+                lines.Add($"Id={p.Id}, Name={p.Name}");
+            }
+            return lines;
+        }
+
+        private void DisplayProcesses(List<ProcessInfo> processes, string ep)
+        {
+            Log($"Получено {processes.Count} процессов от {ep}");
+            foreach (var p in processes)
+            {
+                Log($"Id={p.Id}, Name={p.Name}");
+            }
+        }
     }
 }
