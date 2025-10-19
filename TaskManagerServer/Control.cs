@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -58,6 +59,30 @@ namespace TaskManagerServer
                 }
             }
         }
+        public async Task SendCommandAsync(Socket client, int commandCode, object? data = null)
+        {
+            var message = new
+            {
+                Command = commandCode,
+                Data = data
+            };
+            string json = JsonSerializer.Serialize(message);
+            byte[] msg = Encoding.UTF8.GetBytes(json);
+            await client.SendAsync(msg, SocketFlags.None);
+        }
+        private List<ProcessInfo> ParseProcessList(string json)
+        {
+            try
+            {
+                var processes = JsonSerializer.Deserialize<List<ProcessInfo>>(json);
+                return processes ?? new List<ProcessInfo>();
+            }
+            catch (Exception ex)
+            {
+                Log($"Ошибка десериализации JSON: {ex.Message}");
+                return new List<ProcessInfo>();
+            }
+        }
         public void Stop()
         {
             _running = false;
@@ -75,7 +100,8 @@ namespace TaskManagerServer
             try
             {
                 byte[] bytes = new byte[1024];
-                int total = 0;
+                StringBuilder sb = new StringBuilder();
+
                 while (_running)
                 {
                     int bytesRec = await client.ReceiveAsync(bytes, SocketFlags.None);
@@ -84,10 +110,11 @@ namespace TaskManagerServer
                         //close socket
                         break;
                     }
-                    total += bytesRec;
+                    sb.Append(Encoding.UTF8.GetString(bytes, 0, bytesRec));
                 }
-                string json = Encoding.UTF8.GetString(bytes, 0, total);
-                //await HandleCommandAsync(client, json, ep);
+                    string json = sb.ToString();
+                    var processes = ParseProcessList(json);
+                    Log($"Получено {processes.Count} процессов от {ep}");
             }
             catch (Exception ex)
             {
@@ -97,22 +124,18 @@ namespace TaskManagerServer
             {
                 try
                 {
-                    Stop();
+                    client.Close();
+                    ClientDisconnected?.Invoke(ep);
                 }
                 catch (Exception ex)
                 {
                     {
                         ClientDisconnected?.Invoke(ep);
                     }
-
                 }
 
             }
         }
 
-        //private async Task HandleCommandAsync(Socket client, string json, string ep)
-        //{
-
-        //}
     }
 }
