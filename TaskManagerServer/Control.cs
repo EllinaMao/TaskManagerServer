@@ -12,7 +12,16 @@ namespace TaskManagerServer
         private int _port;
         private Socket? _listener;
         private bool _running;
-
+        /*Написать сетевое приложение «Диспетчер задач»,                                     
+            позволяющее:
+            1 отобразить список запущенных процессов
+            удаленного хоста;
+            2 завершить на удаленном хосте процесс, выбранный
+            из списка;
+            3 обновить список процессов;
+            4 создать новый процесс на удаленном хосте (путь к
+            исполняемому файлу вводится в текстовое поле
+            ввода).*/
 
         public event Action<string>? LogMessage;
         public event Action<string>? ClientConnected;
@@ -107,26 +116,18 @@ namespace TaskManagerServer
         {
             try
             {
-                byte[] bytes = new byte[1024];
-                StringBuilder sb = new StringBuilder();
+                byte[] buffer = new byte[8192];
+                int bytesRec = await client.ReceiveAsync(buffer, SocketFlags.None);
 
-                while (_running)
+                if (bytesRec > 0)
                 {
-                    int bytesRec = await client.ReceiveAsync(bytes, SocketFlags.None);
-                    if (bytesRec == 0)
-                    {
-                        break;
-                    }
-                    sb.Append(Encoding.UTF8.GetString(bytes, 0, bytesRec));
+                    string json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
+                    var processes = ParseProcessList(json);
+
+                    Log($"Получено {processes.Count} процессов от {ep}");
+                    DisplayProcesses(processes, ep);
+                    ProcessesReceived?.Invoke(processes);
                 }
-                string json = sb.ToString();
-                var processes = ParseProcessList(json);
-
-                Log($"Получено {processes.Count} процессов от {ep}");
-                DisplayProcesses(processes, ep);
-                ProcessesReceived?.Invoke(processes);
-
-
             }
             catch (Exception ex)
             {
@@ -134,20 +135,9 @@ namespace TaskManagerServer
             }
             finally
             {
-                try
-                {
-                    client.Close();
-                    ClientDisconnected?.Invoke(ep);
-                }
-                catch (Exception ex)
-                {
-                    {
-                        ClientDisconnected?.Invoke(ep);
-                        _clientSocket = null;
-
-                    }
-                }
-
+                client.Close();
+                ClientDisconnected?.Invoke(ep);
+                _clientSocket = null;
             }
         }
 
