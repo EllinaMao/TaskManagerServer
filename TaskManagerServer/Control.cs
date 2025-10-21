@@ -199,25 +199,6 @@ namespace TaskManagerServer
                 client.Close(); // Не забываем закрывать сокет
             }
         }
-        // Форматирует список процессов в читаемые строки
-        private List<string> FormatProcesses(List<ProcessInfo> processes)
-        {
-            var lines = new List<string>();
-            foreach (var p in processes)
-            {
-                lines.Add($"Id={p.Id}, Name={p.Name}");
-            }
-            return lines;
-        }
 
-        // Логирует список процессов в окно/консоль
-        private void DisplayProcesses(List<ProcessInfo> processes, string ep)
-        {
-            Log($"Получено {processes.Count} процессов от {ep}");
-            foreach (var p in processes)
-            {
-                Log($"Id={p.Id}, Name={p.Name}");
-            }
-        }
     }
 }
