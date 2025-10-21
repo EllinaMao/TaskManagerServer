@@ -130,41 +130,61 @@ namespace TaskManagerServer
         // Асинхронная обработка клиента
         private async Task HandleClientAsync(Socket client, string ep)
         {
+            // Буфер для накопления данных. Выносим из цикла!
+            StringBuilder messageBuilder = new StringBuilder();
+            byte[] buffer = new byte[1024]; // Буфер для чтения из сокета
+
             try
             {
-                byte[] buffer = new byte[1024]; // Буфер для получения данных
-                string json = string.Empty;
                 while (true)
                 {
-                    // Асинхронно получаем данные от клиента
+                    // 1. Асинхронно получаем данные
                     int bytesRec = await client.ReceiveAsync(buffer);
 
+                    // 2. ВАЖНО: Проверяем на разрыв соединения
                     if (bytesRec == 0)
                     {
-                        // Если 0 байт — клиент отключился
-                        break;
+                        Log($"Client {ep} disconnected.");
+                        break; // Выходим из цикла
                     }
 
+                    // 3. Добавляем полученные данные в наш накопитель
+                    messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, bytesRec));
 
-                    // Декодируем полученные байты в строку
-                    json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
+                    // 4. Проверяем, есть ли у нас хотя бы одно *полное* сообщение
+                    // (Мы используем \n как разделитель сообщений)
+                    string allData = messageBuilder.ToString();
+                    int messageEndIndex;
 
-                // Пробуем распознать JSON как список процессов
-                var processes = ParseProcessList(json);
-
-                    if (processes.Count > 0)
+                    // 5. Обрабатываем ВСЕ полные сообщения, которые могли прийти
+                    while ((messageEndIndex = allData.IndexOf('\n')) != -1)
                     {
-                        // Если удалось распарсить — значит пришёл список процессов
-                        Log($"Получено {processes.Count} процессов от {ep}");
-                        ProcessesReceived?.Invoke(processes);
+                        // Вырезаем полное сообщение (до \n)
+                        string fullJsonMessage = allData.Substring(0, messageEndIndex);
+
+                        // Удаляем это сообщение (и \n) из накопителя
+                        allData = allData.Substring(messageEndIndex + 1);
+
+                        // Теперь у нас есть полный JSON, можно парсить
+                        if (!string.IsNullOrEmpty(fullJsonMessage))
+                        {
+                            var processes = ParseProcessList(fullJsonMessage);
+
+                            if (processes.Count > 0)
+                            {
+                                Log($"Получено {processes.Count} процессов от {ep}");
+                                ProcessesReceived?.Invoke(processes);
+                            }
+                            else
+                            {
+                                Log($"Получены данные (не список) от {ep}: {fullJsonMessage}");
+                            }
+                        }
                     }
-                    else
-                    {
-                        // Если это не список — просто выводим полученный текст
-                        Log($"Получены данные от {ep}: {json}");
-                    }
+
+                    // 6. Обновляем накопитель, оставляя в нем "остаток" (начало следующего сообщения)
+                    messageBuilder = new StringBuilder(allData);
                 }
-
             }
             catch (SocketException ex)
             {
@@ -174,21 +194,11 @@ namespace TaskManagerServer
             {
                 Log($"Client {ep} error: {ex.Message}");
             }
-
+            finally
+            {
+                client.Close(); // Не забываем закрывать сокет
+            }
         }
-        //private async Task HandleClientAsync(Socket client, string ep)
-        //{
-        //    string txt = null;
-        //    string data = null;
-        //    byte[] bytes = new byte[1024];//buffer
-        //    int bytesRec = await client.ReceiveAsync(bytes);
-        //    txt = Encoding.UTF8.GetString(bytes);
-        //    while (true)
-        //    {
-
-        //    }
-        //}
-
         // Форматирует список процессов в читаемые строки
         private List<string> FormatProcesses(List<ProcessInfo> processes)
         {
