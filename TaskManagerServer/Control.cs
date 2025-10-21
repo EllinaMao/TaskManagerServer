@@ -130,7 +130,7 @@ namespace TaskManagerServer
         // Асинхронная обработка клиента
         private async Task HandleClientAsync(Socket client, string ep)
         {
-            // Буфер для накопления данных. Выносим из цикла!
+            // Буфер для накопления данных
             StringBuilder messageBuilder = new StringBuilder();
             byte[] buffer = new byte[1024]; // Буфер для чтения из сокета
 
@@ -138,25 +138,25 @@ namespace TaskManagerServer
             {
                 while (true)
                 {
-                    // 1. Асинхронно получаем данные
+                    // Асинхронно получаем данные
                     int bytesRec = await client.ReceiveAsync(buffer);
 
-                    // 2. ВАЖНО: Проверяем на разрыв соединения
+                    // ВАЖНО: Проверяем на разрыв соединения
                     if (bytesRec == 0)
                     {
                         Log($"Client {ep} disconnected.");
                         break; // Выходим из цикла
                     }
 
-                    // 3. Добавляем полученные данные в наш накопитель
+                    // Добавляем полученные данные в наш накопитель
                     messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, bytesRec));
 
-                    // 4. Проверяем, есть ли у нас хотя бы одно *полное* сообщение
+                    // Проверяем, есть ли у нас хотя бы одно *полное* сообщение
                     // (Мы используем \n как разделитель сообщений)
                     string allData = messageBuilder.ToString();
                     int messageEndIndex;
 
-                    // 5. Обрабатываем ВСЕ полные сообщения, которые могли прийти
+                    // Обрабатываем ВСЕ полные сообщения, которые могли прийти
                     while ((messageEndIndex = allData.IndexOf('\n')) != -1)
                     {
                         // Вырезаем полное сообщение (до \n)
@@ -182,7 +182,7 @@ namespace TaskManagerServer
                         }
                     }
 
-                    // 6. Обновляем накопитель, оставляя в нем "остаток" (начало следующего сообщения)
+                    // Обновляем накопитель, оставляя в нем "остаток" (начало следующего сообщения)
                     messageBuilder = new StringBuilder(allData);
                 }
             }
