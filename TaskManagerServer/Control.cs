@@ -100,6 +100,7 @@ namespace TaskManagerServer
         {
             try
             {
+                Log($"Parse process list: {json}");
                 var processes = JsonSerializer.Deserialize<List<ProcessInfo>>(json);
                 return processes ?? new List<ProcessInfo>();
             }
@@ -131,11 +132,11 @@ namespace TaskManagerServer
             try
             {
                 byte[] buffer = new byte[1024]; // Буфер для получения данных
-
+                string json = string.Empty;
                 while (true)
                 {
                     // Асинхронно получаем данные от клиента
-                    int bytesRec = await client.ReceiveAsync(buffer, SocketFlags.None);
+                    int bytesRec = await client.ReceiveAsync(buffer);
 
                     if (bytesRec == 0)
                     {
@@ -144,8 +145,7 @@ namespace TaskManagerServer
                     }
 
                     // Декодируем полученные байты в строку
-                    string json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
-
+                    json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
                     // Пробуем распознать JSON как список процессов
                     var processes = ParseProcessList(json);
 
@@ -161,6 +161,7 @@ namespace TaskManagerServer
                         Log($"Получены данные от {ep}: {json}");
                     }
                 }
+
             }
             catch (SocketException ex)
             {
@@ -170,19 +171,20 @@ namespace TaskManagerServer
             {
                 Log($"Client {ep} error: {ex.Message}");
             }
-            finally
-            {
-                try
-                {
-                    client.Shutdown(SocketShutdown.Both); // Завершаем соединение
-                }
-                catch { }
 
-                client.Close();                            // Закрываем сокет
-                ClientDisconnected?.Invoke(ep);            // Сообщаем об отключении
-                _clientSocket = null;                      // Убираем ссылку на клиента
-            }
         }
+        //private async Task HandleClientAsync(Socket client, string ep)
+        //{
+        //    string txt = null;
+        //    string data = null;
+        //    byte[] bytes = new byte[1024];//buffer
+        //    int bytesRec = await client.ReceiveAsync(bytes);
+        //    txt = Encoding.UTF8.GetString(bytes);
+        //    while (true)
+        //    {
+
+        //    }
+        //}
 
         // Форматирует список процессов в читаемые строки
         private List<string> FormatProcesses(List<ProcessInfo> processes)
