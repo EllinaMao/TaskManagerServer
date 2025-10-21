@@ -15,5 +15,10 @@ namespace TaskManagerServer
             Name = string.Empty;
             Id = 0;
         }
+        public ProcessInfo(string name, int id)
+        {
+            Name=name;
+            Id = id;
+        }
     }
 }
