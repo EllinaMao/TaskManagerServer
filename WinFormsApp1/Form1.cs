@@ -54,7 +54,7 @@ namespace WinFormsApp1
 
         private void Controls_LogMessage(string message)
         {
-            _uiContext?.Post(_ => listBox1.Items.Add(message), null);
+            _uiContext?.Post(_ => listBox2.Items.Add(message), null);
         }
 
         private void Controls_ClientConnected(string ep)

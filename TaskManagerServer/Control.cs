@@ -95,6 +95,7 @@ namespace TaskManagerServer
             await _clientSocket.SendAsync(msg, SocketFlags.None);
         }
 
+
         // Метод для десериализации JSON-строки в список процессов
         public List<ProcessInfo> ParseProcessList(string json)
         {
@@ -144,10 +145,12 @@ namespace TaskManagerServer
                         break;
                     }
 
+
                     // Декодируем полученные байты в строку
                     json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
-                    // Пробуем распознать JSON как список процессов
-                    var processes = ParseProcessList(json);
+
+                // Пробуем распознать JSON как список процессов
+                var processes = ParseProcessList(json);
 
                     if (processes.Count > 0)
                     {
