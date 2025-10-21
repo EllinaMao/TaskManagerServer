@@ -39,6 +39,7 @@ namespace WinFormsApp1
             {
                 await controls.SendCommandAsync(ProcessCodes.KillProcess, id);
             }
+            Refresh_Click(sender, e);
         }
 
         private async void StartNewProcess_Click(object sender, EventArgs e)
@@ -49,7 +50,7 @@ namespace WinFormsApp1
                 MessageBox.Show("You need to enter what process to start");
             }
             await controls.SendCommandAsync(ProcessCodes.CreateProcess, path);
-
+            Refresh_Click(sender, e);
         }
 
         private void Controls_LogMessage(string message)

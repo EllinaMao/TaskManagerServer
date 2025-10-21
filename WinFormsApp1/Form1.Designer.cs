@@ -63,7 +63,7 @@
             // 
             textBoxProcessName.Location = new Point(336, 6);
             textBoxProcessName.Name = "textBoxProcessName";
-            textBoxProcessName.PlaceholderText = "Process name";
+            textBoxProcessName.PlaceholderText = "Process name(aka\"notepad.exe\")";
             textBoxProcessName.Size = new Size(188, 23);
             textBoxProcessName.TabIndex = 4;
             // 
