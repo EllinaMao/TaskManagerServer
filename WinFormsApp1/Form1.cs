@@ -21,32 +21,37 @@ namespace WinFormsApp1
 
         private async void StartProgram_Click(object sender, EventArgs e)
         {
-            await controls.StartAsync();
             button1.Enabled = false;
+            await controls.StartAsync();
         }
 
         private async void Refresh_Click(object sender, EventArgs e)
         {
-            await controls.SendCommandAsync(1); // команда обновить список процессов
+            await controls.SendCommandAsync(ProcessCodes.GetProcesses); // команда обновить список процессов
         }
 
         private async void KillProcess_Click(object sender, EventArgs e)
         {
-            if (listBox1.SelectedItem == null) return;
+            if (listBox2.SelectedItem == null) return;
 
-            var parts = listBox1.SelectedItem.ToString()?.Split('—');
+            var parts = listBox2.SelectedItem.ToString()?.Split('—');
             if (parts?.Length > 0 && int.TryParse(parts[0].Trim(), out int id))
             {
-                await controls.SendCommandAsync(2, id);
+                await controls.SendCommandAsync(ProcessCodes.KillProcess, id);
             }
         }
 
         private async void StartNewProcess_Click(object sender, EventArgs e)
         {
-            string path = textBox1.Text;
-            await controls.SendCommandAsync(3, path);
+            string path = textBoxProcessName.Text;
+            if (string.IsNullOrEmpty(path))
+            {
+                MessageBox.Show("You need to enter what process to start");
+            }
+            await controls.SendCommandAsync(ProcessCodes.CreateProcess, path);
 
         }
+
         private void Controls_LogMessage(string message)
         {
             _uiContext?.Post(_ => listBox1.Items.Add(message), null);
@@ -66,11 +71,10 @@ namespace WinFormsApp1
         {
             _uiContext?.Post(_ =>
             {
-                MessageBox.Show("Fuck");
-                listBox1.Items.Clear();
+                listBox2.Items.Clear();
                 foreach (var p in processes)
                 {
-                    listBox1.Items.Add($"{p.Id} — {p.Name}");
+                    listBox2.Items.Add($"{p.Id} — {p.Name}");
                 }
             }, null);
         }

@@ -7,37 +7,30 @@ using System.Threading.Tasks;
 
 namespace TaskManagerServer
 {
+    // Основной класс сервера, который управляет подключениями и обменом данными с клиентом
     public class ControlAsync
     {
-        private int _port;
-        private Socket? _listener;
-        private bool _running;
-        /*Написать сетевое приложение «Диспетчер задач»,                                     
-            позволяющее:
-            1 отобразить список запущенных процессов
-            удаленного хоста;
-            2 завершить на удаленном хосте процесс, выбранный
-            из списка;
-            3 обновить список процессов;
-            4 создать новый процесс на удаленном хосте (путь к
-            исполняемому файлу вводится в текстовое поле
-            ввода).*/
+        private int _port;                    // Порт, на котором будет работать сервер
+        private Socket? _listener;            // Сокет, который принимает подключения от клиентов
+        private bool _running;                // Флаг состояния сервера — работает ли он сейчас
 
-        public event Action<string>? LogMessage;
-        public event Action<string>? ClientConnected;
-        public event Action<string>? ClientDisconnected;
-        public event Action<List<ProcessInfo>>? ProcessesReceived;
+        // События, чтобы сообщать о разных ситуациях (лог, подключение, отключение, получение данных)
+        public event Action<string>? LogMessage;                    // Для логов
+        public event Action<string>? ClientConnected;                // Когда клиент подключился
+        public event Action<string>? ClientDisconnected;             // Когда клиент отключился
+        public event Action<List<ProcessInfo>>? ProcessesReceived;   // Когда пришёл список процессов от клиента
 
-        private Socket? _clientSocket;
+        private Socket? _clientSocket;       // Сокет, с которым ведётся общение после подключения
+        private SynchronizationContext? _uiContext = null; // Контекст синхронизации для UI (чтобы вызывать события из правильного потока, напр. WinForms)
 
-        private SynchronizationContext _uiContext = null;//winforms
-
-        public ControlAsync(int port = 49200, SynchronizationContext uiContext = null)
+        // Конструктор. Задаёт порт и контекст UI
+        public ControlAsync(int port = 49200, SynchronizationContext? uiContext = null)
         {
             _port = port;
             _uiContext = uiContext ?? new SynchronizationContext();
-
         }
+
+        // Метод логирования — безопасно вызывает LogMessage в UI-потоке
         private void Log(string msg)
         {
             if (_uiContext != null)
@@ -46,12 +39,15 @@ namespace TaskManagerServer
                 LogMessage?.Invoke(msg);
         }
 
+        // Асинхронный запуск сервера
         public async Task StartAsync()
         {
+            // Создаём TCP-сокет
             _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            // Создаём конечную точку, принимающую подключения на всех IP по указанному порту
             IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, 49200);
-            _listener.Bind(ipEndPoint);
-            _listener.Listen(100);
+            _listener.Bind(ipEndPoint);   // Привязываем сокет к адресу
+            _listener.Listen(100);        // Начинаем слушать
             _running = true;
 
             Log($"Server started on port {_port}");
@@ -60,10 +56,15 @@ namespace TaskManagerServer
             {
                 try
                 {
+                    // Асинхронно ждём подключение
                     var clientSocket = await _listener.AcceptAsync();
                     _clientSocket = clientSocket;
+
+                    // Получаем адрес клиента
                     string? ep = clientSocket?.RemoteEndPoint?.ToString();
                     ClientConnected?.Invoke(ep);
+
+                    // Обрабатываем подключение клиента в отдельной задаче
                     _ = HandleClientAsync(_clientSocket, ep);
                 }
                 catch (Exception ex)
@@ -72,20 +73,30 @@ namespace TaskManagerServer
                 }
             }
         }
+
+        // Метод отправки команды клиенту
         public async Task SendCommandAsync(int commandCode, object? data = null)
         {
-            if (_clientSocket == null) return;
+            if (_clientSocket == null) return; // Нет подключения — выходим
 
+            // Формируем сообщение в виде объекта
             var message = new
             {
-                Command = commandCode,
-                Data = data
+                Command = commandCode, // код команды (например: 1 - показать процессы, 2 - убить процесс и т.д.)
+                Data = data            // дополнительные данные (например, имя процесса)
             };
+
+            // Сериализуем в JSON
             string json = JsonSerializer.Serialize(message);
+            // Преобразуем JSON в байты
             byte[] msg = Encoding.UTF8.GetBytes(json);
+
+            // Отправляем данные клиенту
             await _clientSocket.SendAsync(msg, SocketFlags.None);
         }
-        private List<ProcessInfo> ParseProcessList(string json)
+
+        // Метод для десериализации JSON-строки в список процессов
+        public List<ProcessInfo> ParseProcessList(string json)
         {
             try
             {
@@ -98,49 +109,82 @@ namespace TaskManagerServer
                 return new List<ProcessInfo>();
             }
         }
+
+        // Остановка сервера и закрытие сокетов
         public void Stop()
         {
             _running = false;
             try
             {
-                _listener?.Close();
-                _clientSocket?.Close();
-
+                _listener?.Close();       // Закрываем серверный сокет
+                _clientSocket?.Close();   // Закрываем клиентский сокет
             }
             catch (Exception ex)
             {
                 Log("Close error: " + ex.Message);
             }
         }
+
+        // Асинхронная обработка клиента
         private async Task HandleClientAsync(Socket client, string ep)
         {
             try
             {
-                byte[] buffer = new byte[8192];
-                int bytesRec = await client.ReceiveAsync(buffer, SocketFlags.None);
+                byte[] buffer = new byte[1024]; // Буфер для получения данных
 
-                if (bytesRec > 0)
+                while (true)
                 {
+                    // Асинхронно получаем данные от клиента
+                    int bytesRec = await client.ReceiveAsync(buffer, SocketFlags.None);
+
+                    if (bytesRec == 0)
+                    {
+                        // Если 0 байт — клиент отключился
+                        break;
+                    }
+
+                    // Декодируем полученные байты в строку
                     string json = Encoding.UTF8.GetString(buffer, 0, bytesRec);
+
+                    // Пробуем распознать JSON как список процессов
                     var processes = ParseProcessList(json);
 
-                    Log($"Получено {processes.Count} процессов от {ep}");
-                    DisplayProcesses(processes, ep);
-                    ProcessesReceived?.Invoke(processes);
+                    if (processes.Count > 0)
+                    {
+                        // Если удалось распарсить — значит пришёл список процессов
+                        Log($"Получено {processes.Count} процессов от {ep}");
+                        ProcessesReceived?.Invoke(processes);
+                    }
+                    else
+                    {
+                        // Если это не список — просто выводим полученный текст
+                        Log($"Получены данные от {ep}: {json}");
+                    }
                 }
+            }
+            catch (SocketException ex)
+            {
+                Log($"Client {ep} socket error: {ex.Message}");
             }
             catch (Exception ex)
             {
-                Log($"Client {ep} error {ex.Message}");
+                Log($"Client {ep} error: {ex.Message}");
             }
             finally
             {
-                client.Close();
-                ClientDisconnected?.Invoke(ep);
-                _clientSocket = null;
+                try
+                {
+                    client.Shutdown(SocketShutdown.Both); // Завершаем соединение
+                }
+                catch { }
+
+                client.Close();                            // Закрываем сокет
+                ClientDisconnected?.Invoke(ep);            // Сообщаем об отключении
+                _clientSocket = null;                      // Убираем ссылку на клиента
             }
         }
 
+        // Форматирует список процессов в читаемые строки
         private List<string> FormatProcesses(List<ProcessInfo> processes)
         {
             var lines = new List<string>();
@@ -151,6 +195,7 @@ namespace TaskManagerServer
             return lines;
         }
 
+        // Логирует список процессов в окно/консоль
         private void DisplayProcesses(List<ProcessInfo> processes, string ep)
         {
             Log($"Получено {processes.Count} процессов от {ep}");
